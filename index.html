@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Canvas Drawing Board</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .app {
+      width: 95vw;
+      height: 95vh;
+      background: #020617;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 18px;
+      background: rgba(15, 23, 42, 0.98);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      color: #38bdf8;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    button,
+    .chip {
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      color: #e5e7eb;
+      font-size: 13px;
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, transform 0.08s;
+    }
+
+    button:hover,
+    .chip:hover {
+      background: rgba(148, 163, 184, 0.16);
+      transform: translateY(-1px);
+    }
+
+    button:active,
+    .chip:active {
+      transform: translateY(0);
+    }
+
+    button.active {
+      background: #38bdf8;
+      color: #020617;
+    }
+
+    /* Color buttons */
+    .color-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      padding: 0;
+    }
+
+    .color-swatch.active {
+      border-color: #f9fafb;
+      box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9);
+    }
+
+    /* Range */
+    input[type="range"] {
+      accent-color: #38bdf8;
+    }
+
+    /* Canvas wrapper */
+    .canvas-wrapper {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at 1px 1px, #1e293b 1px, #020617 0);
+      background-size: 24px 24px;
+    }
+
+    canvas {
+      position: absolute;
+      inset: 16px;
+      width: calc(100% - 32px);
+      height: calc(100% - 32px);
+      border-radius: 16px;
+      background: #0b1120;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.9);
+      cursor: crosshair;
+    }
+
+    /* Small footer badge */
+    .footer {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      font-size: 11px;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #9ca3af;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    @media (max-width: 768px) {
+      .toolbar {
+        flex-wrap: wrap;
+        row-gap: 8px;
+      }
+      .logo {
+        width: 100%;
+      }
+      .spacer {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="logo">MiniDraw</div>
+
+      <!-- Colors -->
+      <div class="group" id="colorGroup">
+        <span style="font-size: 12px; color:#94a3b8;">Color</span>
+        <button class="color-swatch active" data-color="#f97316" style="background:#f97316;"></button>
+        <button class="color-swatch" data-color="#22c55e" style="background:#22c55e;"></button>
+        <button class="color-swatch" data-color="#38bdf8" style="background:#38bdf8;"></button>
+        <button class="color-swatch" data-color="#a855f7" style="background:#a855f7;"></button>
+        <button class="color-swatch" data-color="#e5e7eb" style="background:#e5e7eb;"></button>
+      </div>
+
+      <!-- Brush size -->
+      <div class="group">
+        <span style="font-size: 12px; color:#94a3b8;">Brush</span>
+        <input id="sizeRange" type="range" min="2" max="30" value="5" />
+      </div>
+
+      <!-- Mode -->
+      <div class="group">
+        <button id="penBtn" class="active">Pen</button>
+        <button id="eraserBtn">Eraser</button>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- Actions -->
+      <div class="group">
+        <button id="clearBtn">Clear</button>
+        <button id="downloadBtn">Download PNG</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <canvas id="board"></canvas>
+      <div class="footer">Single-user drawing board • HTML + CSS + Canvas</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+
+    // Resize canvas to match CSS size
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = rect.width * scale;
+      canvas.height = rect.height * scale;
+      ctx.scale(scale, scale);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      redrawBackground(); // Optional: keep it clean after resize
+    }
+
+    function redrawBackground() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // State
+    let drawing = false;
+    let currentColor = "#f97316";
+    let currentSize = 5;
+    let erasing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+      };
+    }
+
+    function startDraw(e) {
+      drawing = true;
+      const pos = getPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function draw(e) {
+      if (!drawing) return;
+      const pos = getPos(e);
+
+      ctx.strokeStyle = erasing ? "#0b1120" : currentColor;
+      ctx.lineWidth = currentSize;
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function endDraw() {
+      drawing = false;
+    }
+
+    // Mouse / touch listeners
+    canvas.addEventListener("mousedown", startDraw);
+    canvas.addEventListener("mousemove", draw);
+    window.addEventListener("mouseup", endDraw);
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      startDraw(e);
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      draw(e);
+    }, { passive: false });
+
+    window.addEventListener("touchend", endDraw);
+
+    // Color selection
+    const colorButtons = document.querySelectorAll(".color-swatch");
+    colorButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        colorButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentColor = btn.dataset.color;
+        erasing = false;
+        penBtn.classList.add("active");
+        eraserBtn.classList.remove("active");
+      });
+    });
+
+    // Brush size
+    const sizeRange = document.getElementById("sizeRange");
+    sizeRange.addEventListener("input", () => {
+      currentSize = Number(sizeRange.value);
+    });
+
+    // Pen / Eraser
+    const penBtn = document.getElementById("penBtn");
+    const eraserBtn = document.getElementById("eraserBtn");
+
+    penBtn.addEventListener("click", () => {
+      erasing = false;
+      penBtn.classList.add("active");
+      eraserBtn.classList.remove("active");
+    });
+
+    eraserBtn.addEventListener("click", () => {
+      erasing = true;
+      eraserBtn.classList.add("active");
+      penBtn.classList.remove("active");
+    });
+
+    // Clear
+    const clearBtn = document.getElementById("clearBtn");
+    clearBtn.addEventListener("click", () => {
+      redrawBackground();
+    });
+
+    // Download
+    const downloadBtn = document.getElementById("downloadBtn");
+    downloadBtn.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "drawing.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+  </script>
+</body>
+</html>
+
